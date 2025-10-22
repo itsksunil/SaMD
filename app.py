@@ -2,8 +2,6 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import fitz  # PyMuPDF
-import re
 from datetime import datetime
 import numpy as np
 from io import BytesIO
@@ -20,397 +18,520 @@ st.set_page_config(
 
 st.title("🧬 Digital Twin Health Risk Analyzer")
 st.markdown("""
-**AI-powered health risk analysis** using your lab reports to create a digital health profile.
+**Complete manual health data input** - Create your digital twin by entering lab results, symptoms, and health information.
 """)
 
 # ----------------------------
-# IMPROVED PDF EXTRACTION FUNCTIONS
+# SYMPTOMS DATABASE
 # ----------------------------
-def extract_text_from_pdf(file):
-    """Extract text from PDF file - SIMPLIFIED VERSION"""
-    try:
-        # Reset file pointer
-        file.seek(0)
-        # Read file as bytes
-        pdf_bytes = file.read()
-        # Open PDF from bytes
-        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-        text = ""
-        for page_num in range(len(doc)):
-            page = doc.load_page(page_num)
-            text += page.get_text()
-        doc.close()
-        return text
-    except Exception as e:
-        st.error(f"❌ Error reading PDF: {str(e)}")
-        return ""
-
-def debug_pdf_content(text, filename):
-    """Show what's actually in the PDF for debugging"""
-    with st.expander(f"🔍 DEBUG: Raw text from {filename}", expanded=False):
-        st.text_area("Extracted Text", text[:5000] + "..." if len(text) > 5000 else text, height=300)
-
-def extract_lab_values_robust(text, filename):
-    """Robust lab value extraction that works with various PDF formats"""
-    lab_data = {}
-    
-    # First, let's see what patterns we can find
-    st.write(f"**Analyzing {filename}...**")
-    
-    # Common test patterns with flexible matching
-    test_patterns = [
-        # HbA1c patterns
-        (r'HbA1c[\s:]*([\d.]+)', 'HbA1c'),
-        (r'HBA1C[\s:]*([\d.]+)', 'HbA1c'),
-        (r'HbA1c.*?([\d.]+)\s*%', 'HbA1c'),
-        
-        # Glucose patterns
-        (r'Glucose[\s:]*([\d.]+)', 'Glucose'),
-        (r'Glucose.*?Random[\s:]*([\d.]+)', 'Glucose'),
-        (r'Random Glucose[\s:]*([\d.]+)', 'Glucose'),
-        
-        # Hemoglobin patterns
-        (r'Hemoglobin[\s:]*([\d.]+)', 'Hb'),
-        (r'Hb[\s:]*([\d.]+)', 'Hb'),
-        (r'Hemoglobin.*?([\d.]+)\s*gm/dl', 'Hb'),
-        
-        # WBC patterns
-        (r'WBC/TLC[\s:]*([\d.]+)', 'WBC'),
-        (r'WBC[\s:]*([\d.]+)', 'WBC'),
-        (r'White Blood Cell[\s:]*([\d.]+)', 'WBC'),
-        
-        # Platelet patterns
-        (r'Platelet Count[\s:]*([\d.]+)', 'Platelet'),
-        (r'Platelet[\s:]*([\d.]+)', 'Platelet'),
-        (r'PLT[\s:]*([\d.]+)', 'Platelet'),
-        
-        # Liver function tests
-        (r'SGPT - ALT[\s:]*([\d.]+)', 'ALT'),
-        (r'ALT[\s:]*([\d.]+)', 'ALT'),
-        (r'SGPT[\s:]*([\d.]+)', 'ALT'),
-        (r'SGOT - AST[\s:]*([\d.]+)', 'AST'),
-        (r'AST[\s:]*([\d.]+)', 'AST'),
-        (r'SGOT[\s:]*([\d.]+)', 'AST'),
-        
-        # Other common tests
-        (r'Creatinine[\s:]*([\d.]+)', 'Creatinine'),
-        (r'Urea[\s:]*([\d.]+)', 'Urea'),
-        (r'Bilirubin[\s:]*([\d.]+)', 'Bilirubin'),
-        (r'Albumin[\s:]*([\d.]+)', 'Albumin'),
-        (r'Calcium[\s:]*([\d.]+)', 'Calcium'),
-        (r'ESR[\s:]*([\d.]+)', 'ESR'),
-        (r'E\.S\.R\.[\s:]*([\d.]+)', 'ESR'),
-    ]
-    
-    extracted_tests = []
-    
-    for pattern, test_name in test_patterns:
-        matches = re.findall(pattern, text, re.IGNORECASE)
-        if matches:
-            # Take the first match
-            value = matches[0]
-            try:
-                lab_data[test_name] = float(value)
-                extracted_tests.append(test_name)
-                st.success(f"✅ {test_name}: {value}")
-            except ValueError:
-                st.warning(f"⚠️ Could not convert {test_name} value: {value}")
-    
-    # Try to extract date
-    date_patterns = [
-        r'Received On\s*:\s*(\d{1,2}/\d{1,2}/\d{4})',
-        r'Reported On\s*:\s*(\d{1,2}/\d{1,2}/\d{4})',
-        r'Date\s*:\s*(\d{1,2}/\d{1,2}/\d{4})',
-        r'(\d{1,2}/\d{1,2}/\d{4})'
-    ]
-    
-    for pattern in date_patterns:
-        match = re.search(pattern, text)
-        if match:
-            try:
-                date_str = match.group(1)
-                lab_data['Date'] = pd.to_datetime(date_str, format='%d/%m/%Y')
-                st.success(f"✅ Date extracted: {date_str}")
-                break
-            except:
-                continue
-    
-    # Extract patient info
-    name_match = re.search(r'Name\s*:\s*([A-Z\s]+)', text)
-    if name_match:
-        lab_data['Patient_Name'] = name_match.group(1).strip()
-    
-    age_match = re.search(r'Age\s*:\s*(\d+)', text)
-    if age_match:
-        lab_data['Patient_Age'] = age_match.group(1)
-    
-    st.info(f"📊 Extracted {len(extracted_tests)} tests: {', '.join(extracted_tests)}")
-    
-    return lab_data
+SYMPTOMS_DATABASE = {
+    "Diabetes": {
+        "symptoms": [
+            "Frequent urination", "Increased thirst", "Extreme hunger", 
+            "Unexplained weight loss", "Fatigue", "Blurred vision",
+            "Slow healing wounds", "Frequent infections", "Tingling in hands/feet"
+        ],
+        "risk_weight": 2
+    },
+    "Liver Disease": {
+        "symptoms": [
+            "Jaundice (yellow skin)", "Abdominal pain", "Fatigue", "Nausea/Vomiting",
+            "Loss of appetite", "Swelling in legs", "Dark urine", 
+            "Pale stools", "Itchy skin"
+        ],
+        "risk_weight": 3
+    },
+    "Cardiovascular": {
+        "symptoms": [
+            "Chest pain", "Shortness of breath", "Palpitations", 
+            "Dizziness", "Swelling in ankles", "Fatigue",
+            "Irregular heartbeat", "Fainting", "Cold sweats"
+        ],
+        "risk_weight": 2
+    },
+    "Kidney Disease": {
+        "symptoms": [
+            "Swelling in face", "Swelling in hands", "Swelling in feet",
+            "Fatigue", "Nausea", "Shortness of breath", 
+            "Blood in urine", "Foamy urine", "Poor appetite"
+        ],
+        "risk_weight": 2
+    },
+    "Thyroid Issues": {
+        "symptoms": [
+            "Fatigue", "Weight gain", "Weight loss", "Mood swings",
+            "Hair loss", "Temperature sensitivity", "Dry skin",
+            "Muscle weakness", "Sleep problems"
+        ],
+        "risk_weight": 1
+    },
+    "Anemia": {
+        "symptoms": [
+            "Fatigue", "Weakness", "Pale skin", "Shortness of breath",
+            "Dizziness", "Cold hands/feet", "Headaches", 
+            "Chest pain", "Brittle nails"
+        ],
+        "risk_weight": 2
+    },
+    "Cancer General": {
+        "symptoms": [
+            "Unexplained weight loss", "Fatigue", "Fever", 
+            "Persistent pain", "Skin changes", "Lump or thickening",
+            "Bowel changes", "Persistent cough", "Difficulty swallowing"
+        ],
+        "risk_weight": 4
+    }
+}
 
 # ----------------------------
-# SIMPLE RISK ASSESSMENT
+# GENE DATABASE
 # ----------------------------
-def calculate_simple_risks(df):
-    """Calculate basic health risks from lab data"""
-    risks = {}
-    
-    if not df.empty:
-        latest_data = df.iloc[-1]
-        
-        # Diabetes Risk
-        if 'HbA1c' in latest_data and pd.notna(latest_data['HbA1c']):
-            hba1c = latest_data['HbA1c']
-            if hba1c > 6.5:
-                risks['Diabetes'] = '🔴 High'
-            elif hba1c > 5.7:
-                risks['Diabetes'] = '🟠 Moderate'
-            else:
-                risks['Diabetes'] = '🟢 Low'
-        
-        # Liver Risk
-        if 'ALT' in latest_data and pd.notna(latest_data['ALT']):
-            alt = latest_data['ALT']
-            if alt > 100:
-                risks['Liver'] = '🔴 High'
-            elif alt > 50:
-                risks['Liver'] = '🟠 Moderate'
-            else:
-                risks['Liver'] = '🟢 Low'
-        
-        # Anemia Risk
-        if 'Hb' in latest_data and pd.notna(latest_data['Hb']):
-            hb = latest_data['Hb']
-            if hb < 11:
-                risks['Anemia'] = '🔴 High'
-            elif hb < 13:
-                risks['Anemia'] = '🟠 Moderate'
-            else:
-                risks['Anemia'] = '🟢 Low'
-    
-    return risks
+GENE_ASSOCIATIONS = {
+    "Type 2 Diabetes": ["TCF7L2", "PPARG", "KCNJ11", "ABCC8", "FTO", "IRS1"],
+    "Pancreatic Cancer": ["KRAS", "TP53", "CDKN2A", "SMAD4", "BRCA2"],
+    "Colorectal Cancer": ["APC", "KRAS", "TP53", "MLH1", "MSH2"],
+    "Cardiovascular Disease": ["APOE", "PCSK9", "LDLR", "APOB", "CETP"],
+    "Liver Disease": ["PNPLA3", "TM6SF2", "HFE", "SERPINA1"],
+    "Obesity": ["FTO", "MC4R", "BDNF", "POMC"]
+}
 
 # ----------------------------
-# STREAMLIT APP
+# INITIALIZE SESSION STATE
 # ----------------------------
-st.header("👤 Patient Information")
+if 'health_data' not in st.session_state:
+    st.session_state.health_data = pd.DataFrame()
+if 'symptoms_data' not in st.session_state:
+    st.session_state.symptoms_data = {}
+if 'genetic_data' not in st.session_state:
+    st.session_state.genetic_data = {}
+
+# ----------------------------
+# MANUAL DATA INPUT SECTIONS
+# ----------------------------
+
+# 1. PATIENT PROFILE
+st.header("👤 Patient Profile & Demographics")
 
 col1, col2, col3 = st.columns(3)
 with col1:
+    patient_name = st.text_input("Full Name", "John Doe")
     age = st.number_input("Age", 0, 120, 34)
-    weight = st.number_input("Weight (kg)", 10, 200, 70)
-with col2:
     gender = st.selectbox("Gender", ["Male", "Female", "Other"])
+    
+with col2:
+    weight = st.number_input("Weight (kg)", 10, 200, 70)
     height = st.number_input("Height (cm)", 50, 250, 170)
-with col3:
     if height > 0:
         bmi = round(weight / ((height/100) ** 2), 2)
         bmi_category = "Obese" if bmi >= 30 else "Overweight" if bmi >= 25 else "Normal" if bmi >= 18.5 else "Underweight"
         st.metric("BMI", f"{bmi} ({bmi_category})")
-    else:
-        bmi = 0
-        st.metric("BMI", "Invalid height")
-
-# Family History
-st.subheader("🏥 Family History")
-fam_col1, fam_col2 = st.columns(2)
-with fam_col1:
-    family_diabetes = st.checkbox("Diabetes in family")
-    family_heart = st.checkbox("Heart disease in family")
-with fam_col2:
-    family_cancer = st.checkbox("Cancer in family")
-    smoking = st.checkbox("Smoking history")
-
-# ----------------------------
-# PDF UPLOAD AND PROCESSING
-# ----------------------------
-st.header("📁 Upload Lab Reports")
-
-uploaded_files = st.file_uploader(
-    "Choose PDF lab reports", 
-    type="pdf", 
-    accept_multiple_files=True,
-    help="Upload your lab reports in PDF format"
-)
-
-# Initialize session state
-if 'df_all' not in st.session_state:
-    st.session_state.df_all = pd.DataFrame()
-
-# Debug option
-debug_mode = st.checkbox("Enable debug mode (show raw PDF text)")
-
-if uploaded_files:
-    st.success(f"📄 {len(uploaded_files)} file(s) uploaded successfully!")
     
-    if st.button("🚀 Extract Data from PDFs", type="primary"):
-        all_extracted_data = []
+with col3:
+    location = st.text_input("Location", "Mumbai")
+    activity_level = st.selectbox("Activity Level", ["Sedentary", "Light", "Moderate", "Active", "Very Active"])
+    alcohol_consumption = st.selectbox("Alcohol Consumption", ["Never", "Occasional", "Regular"])
+
+# 2. FAMILY HISTORY
+st.header("🏥 Family Medical History")
+
+fam_col1, fam_col2, fam_col3 = st.columns(3)
+with fam_col1:
+    family_diabetes = st.checkbox("Diabetes")
+    family_heart_disease = st.checkbox("Heart Disease")
+    family_hypertension = st.checkbox("Hypertension")
+    
+with fam_col2:
+    family_cancer = st.checkbox("Cancer")
+    family_liver_disease = st.checkbox("Liver Disease")
+    family_kidney_disease = st.checkbox("Kidney Disease")
+    
+with fam_col3:
+    smoking_history = st.checkbox("Smoking History")
+    family_obesity = st.checkbox("Obesity")
+    family_thyroid = st.checkbox("Thyroid Disorders")
+
+# 3. SYMPTOMS INPUT
+st.header("🤒 Current Symptoms")
+st.info("Select all symptoms you're currently experiencing")
+
+# Organize symptoms by category
+symptoms_container = st.container()
+
+with symptoms_container:
+    for condition, data in SYMPTOMS_DATABASE.items():
+        with st.expander(f"🔍 {condition} Symptoms", expanded=False):
+            cols = st.columns(2)
+            for i, symptom in enumerate(data["symptoms"]):
+                col_idx = i % 2
+                with cols[col_idx]:
+                    symptom_key = f"{condition}_{symptom}"
+                    st.session_state.symptoms_data[symptom_key] = st.checkbox(symptom, key=symptom_key)
+
+# 4. GENETIC FACTORS
+st.header("🧬 Known Genetic Factors")
+st.info("Select any known genetic markers from previous genetic testing")
+
+genetic_container = st.container()
+with genetic_container:
+    genetic_cols = st.columns(2)
+    col_idx = 0
+    
+    for condition, genes in GENE_ASSOCIATIONS.items():
+        with genetic_cols[col_idx]:
+            st.subheader(f"{condition}")
+            for gene in genes:
+                gene_key = f"gene_{gene}"
+                st.session_state.genetic_data[gene_key] = st.checkbox(gene, key=gene_key)
         
-        for file in uploaded_files:
-            st.markdown(f"---")
-            st.subheader(f"Processing: {file.name}")
-            
-            # Extract text from PDF
-            with st.spinner("Reading PDF..."):
-                text = extract_text_from_pdf(file)
-            
-            if text:
-                if debug_mode:
-                    debug_pdf_content(text, file.name)
-                
-                # Extract lab values
-                with st.spinner("Extracting lab values..."):
-                    lab_data = extract_lab_values_robust(text, file.name)
-                
-                if lab_data:
-                    lab_data['Filename'] = file.name
-                    all_extracted_data.append(lab_data)
-                    st.success(f"✅ Successfully extracted data from {file.name}")
-                else:
-                    st.error(f"❌ No lab data could be extracted from {file.name}")
-            else:
-                st.error(f"❌ Could not read PDF: {file.name}")
-        
-        # Create DataFrame
-        if all_extracted_data:
-            st.session_state.df_all = pd.DataFrame(all_extracted_data)
-            
-            # Process dates
-            if 'Date' in st.session_state.df_all.columns:
-                st.session_state.df_all['Date'] = pd.to_datetime(
-                    st.session_state.df_all['Date'], errors='coerce'
-                )
-                # Remove invalid dates
-                st.session_state.df_all = st.session_state.df_all[st.session_state.df_all['Date'].notna()]
-                if not st.session_state.df_all.empty:
-                    st.session_state.df_all = st.session_state.df_all.sort_values('Date').reset_index(drop=True)
+        col_idx = (col_idx + 1) % 2
+
+# 5. LAB RESULTS INPUT
+st.header("📊 Lab Test Results")
+st.info("Enter your latest lab test results. Leave blank if not tested.")
+
+lab_date = st.date_input("Test Date", datetime.now())
+
+# Lab results input in expandable sections
+with st.expander("🩸 Complete Blood Count (CBC)", expanded=True):
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        hemoglobin = st.number_input("Hemoglobin (g/dL)", 5.0, 20.0, 13.0, step=0.1)
+        wbc = st.number_input("WBC (10³/μL)", 1.0, 50.0, 5.0, step=0.1)
+    with col2:
+        platelet = st.number_input("Platelet Count (10³/μL)", 50.0, 500.0, 200.0, step=10.0)
+        rbc = st.number_input("RBC (10⁶/μL)", 3.0, 8.0, 5.0, step=0.1)
+    with col3:
+        hematocrit = st.number_input("Hematocrit (%)", 30.0, 60.0, 42.0, step=0.1)
+        esr = st.number_input("ESR (mm/hr)", 0.0, 100.0, 10.0, step=1.0)
+
+with st.expander("🩺 Diabetes & Metabolic Panel"):
+    col1, col2 = st.columns(2)
+    with col1:
+        hba1c = st.number_input("HbA1c (%)", 4.0, 15.0, 5.5, step=0.1)
+        glucose = st.number_input("Glucose (mg/dL)", 50.0, 300.0, 90.0, step=1.0)
+    with col2:
+        insulin = st.number_input("Insulin (μIU/mL)", 0.0, 50.0, 5.0, step=0.1)
+        c_peptide = st.number_input("C-Peptide (ng/mL)", 0.0, 10.0, 1.5, step=0.1)
+
+with st.expander("💊 Liver Function Tests"):
+    col1, col2 = st.columns(2)
+    with col1:
+        alt = st.number_input("ALT (SGPT) U/L", 5.0, 200.0, 25.0, step=1.0)
+        ast = st.number_input("AST (SGOT) U/L", 5.0, 200.0, 25.0, step=1.0)
+    with col2:
+        alp = st.number_input("ALP U/L", 30.0, 300.0, 80.0, step=1.0)
+        bilirubin = st.number_input("Total Bilirubin (mg/dL)", 0.1, 10.0, 0.8, step=0.1)
+
+with st.expander("🫀 Kidney Function & Electrolytes"):
+    col1, col2 = st.columns(2)
+    with col1:
+        creatinine = st.number_input("Creatinine (mg/dL)", 0.5, 10.0, 0.9, step=0.1)
+        urea = st.number_input("Urea (mg/dL)", 10.0, 100.0, 25.0, step=1.0)
+    with col2:
+        sodium = st.number_input("Sodium (mmol/L)", 130.0, 150.0, 140.0, step=1.0)
+        potassium = st.number_input("Potassium (mmol/L)", 3.0, 6.0, 4.0, step=0.1)
+
+with st.expander("📈 Lipid Profile"):
+    col1, col2 = st.columns(2)
+    with col1:
+        cholesterol = st.number_input("Total Cholesterol (mg/dL)", 100.0, 300.0, 180.0, step=5.0)
+        ldl = st.number_input("LDL Cholesterol (mg/dL)", 50.0, 250.0, 100.0, step=5.0)
+    with col2:
+        hdl = st.number_input("HDL Cholesterol (mg/dL)", 20.0, 100.0, 50.0, step=5.0)
+        triglycerides = st.number_input("Triglycerides (mg/dL)", 50.0, 500.0, 120.0, step=5.0)
+
+with st.expander("🔬 Other Important Tests"):
+    col1, col2 = st.columns(2)
+    with col1:
+        calcium = st.number_input("Calcium (mg/dL)", 7.0, 12.0, 9.5, step=0.1)
+        tsh = st.number_input("TSH (μIU/mL)", 0.1, 10.0, 2.0, step=0.1)
+    with col2:
+        vitamin_d = st.number_input("Vitamin D (ng/mL)", 10.0, 100.0, 30.0, step=1.0)
+        psa = st.number_input("PSA (ng/mL)", 0.0, 10.0, 1.0, step=0.1)
+
+# ----------------------------
+# SAVE DATA BUTTON
+# ----------------------------
+if st.button("💾 Save Health Data", type="primary"):
+    # Compile all lab data
+    lab_data = {
+        'Date': lab_date,
+        'Hemoglobin': hemoglobin,
+        'WBC': wbc,
+        'Platelet': platelet,
+        'RBC': rbc,
+        'Hematocrit': hematocrit,
+        'ESR': esr,
+        'HbA1c': hba1c,
+        'Glucose': glucose,
+        'Insulin': insulin,
+        'C_Peptide': c_peptide,
+        'ALT': alt,
+        'AST': ast,
+        'ALP': alp,
+        'Bilirubin': bilirubin,
+        'Creatinine': creatinine,
+        'Urea': urea,
+        'Sodium': sodium,
+        'Potassium': potassium,
+        'Cholesterol': cholesterol,
+        'LDL': ldl,
+        'HDL': hdl,
+        'Triglycerides': triglycerides,
+        'Calcium': calcium,
+        'TSH': tsh,
+        'Vitamin_D': vitamin_d,
+        'PSA': psa,
+        'Patient_Name': patient_name,
+        'Age': age,
+        'Gender': gender,
+        'BMI': bmi
+    }
+    
+    # Convert to DataFrame
+    new_entry = pd.DataFrame([lab_data])
+    
+    if st.session_state.health_data.empty:
+        st.session_state.health_data = new_entry
+    else:
+        st.session_state.health_data = pd.concat([st.session_state.health_data, new_entry], ignore_index=True)
+    
+    st.success("✅ Health data saved successfully!")
+
+# ----------------------------
+# RISK ASSESSMENT FUNCTIONS
+# ----------------------------
+def calculate_diabetes_risk(lab_data, symptoms, family_history, age, bmi):
+    risk_score = 0
+    
+    # Lab values
+    if lab_data.get('HbA1c', 0) > 6.5:
+        risk_score += 3
+    elif lab_data.get('HbA1c', 0) > 5.7:
+        risk_score += 2
+    
+    if lab_data.get('Glucose', 0) > 126:
+        risk_score += 2
+    
+    # Symptoms
+    diabetes_symptoms = [s for s in SYMPTOMS_DATABASE["Diabetes"]["symptoms"] 
+                        if st.session_state.symptoms_data.get(f"Diabetes_{s}", False)]
+    risk_score += len(diabetes_symptoms)
+    
+    # Demographics
+    if age > 45:
+        risk_score += 1
+    if bmi >= 25:
+        risk_score += 1
+    if family_history:
+        risk_score += 2
+    
+    return min(risk_score, 10)
+
+def calculate_liver_risk(lab_data, symptoms, alcohol_consumption):
+    risk_score = 0
+    
+    # Lab values
+    if lab_data.get('ALT', 0) > 40:
+        risk_score += 2
+    if lab_data.get('AST', 0) > 40:
+        risk_score += 2
+    if lab_data.get('Bilirubin', 0) > 1.2:
+        risk_score += 2
+    
+    # Symptoms
+    liver_symptoms = [s for s in SYMPTOMS_DATABASE["Liver Disease"]["symptoms"] 
+                     if st.session_state.symptoms_data.get(f"Liver Disease_{s}", False)]
+    risk_score += len(liver_symptoms)
+    
+    # Lifestyle
+    if alcohol_consumption == "Regular":
+        risk_score += 2
+    
+    return min(risk_score, 10)
+
+def get_risk_label(score):
+    if score >= 7:
+        return "🔴 High"
+    elif score >= 4:
+        return "🟠 Moderate"
+    else:
+        return "🟢 Low"
 
 # ----------------------------
 # DISPLAY RESULTS
 # ----------------------------
-if not st.session_state.df_all.empty:
-    df = st.session_state.df_all
+if not st.session_state.health_data.empty:
+    st.header("📊 Your Health Dashboard")
     
-    st.header("📊 Extracted Lab Data")
+    current_data = st.session_state.health_data.iloc[-1].to_dict()
     
-    # Summary metrics
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Total Reports", len(df))
+    # Risk Assessment
+    st.subheader("🩺 Health Risk Assessment")
     
-    test_columns = [col for col in df.columns if col not in ['Date', 'Filename', 'Patient_Name', 'Patient_Age']]
-    col2.metric("Tests Extracted", len(test_columns))
+    diabetes_risk = calculate_diabetes_risk(
+        current_data, 
+        st.session_state.symptoms_data, 
+        family_diabetes, 
+        age, 
+        bmi
+    )
     
-    if 'Date' in df.columns:
-        date_range = f"{df['Date'].min().strftime('%d/%m/%Y')} to {df['Date'].max().strftime('%d/%m/%Y')}"
+    liver_risk = calculate_liver_risk(
+        current_data,
+        st.session_state.symptoms_data,
+        alcohol_consumption
+    )
+    
+    # Display Risk Scores
+    risk_col1, risk_col2, risk_col3, risk_col4 = st.columns(4)
+    
+    with risk_col1:
+        st.metric("Diabetes Risk", get_risk_label(diabetes_risk), f"Score: {diabetes_risk}/10")
+    
+    with risk_col2:
+        st.metric("Liver Disease Risk", get_risk_label(liver_risk), f"Score: {liver_risk}/10")
+    
+    with risk_col3:
+        # Cardiovascular risk (simplified)
+        cv_risk = 3 if family_heart_disease else 1
+        if current_data.get('Cholesterol', 0) > 200:
+            cv_risk += 2
+        if smoking_history:
+            cv_risk += 2
+        st.metric("Heart Disease Risk", get_risk_label(cv_risk), f"Score: {cv_risk}/10")
+    
+    with risk_col4:
+        # Cancer risk (simplified)
+        cancer_risk = 3 if family_cancer else 1
+        cancer_symptoms = [s for s in SYMPTOMS_DATABASE["Cancer General"]["symptoms"] 
+                          if st.session_state.symptoms_data.get(f"Cancer General_{s}", False)]
+        cancer_risk += len(cancer_symptoms)
+        st.metric("Cancer Risk", get_risk_label(cancer_risk), f"Score: {cancer_risk}/10")
+    
+    # Symptoms Analysis
+    st.subheader("🤒 Symptoms Analysis")
+    
+    active_symptoms = []
+    for symptom_key, is_active in st.session_state.symptoms_data.items():
+        if is_active:
+            active_symptoms.append(symptom_key.replace("_", " "))
+    
+    if active_symptoms:
+        st.warning(f"**Active Symptoms:** {', '.join(active_symptoms)}")
     else:
-        date_range = "N/A"
-    col3.metric("Date Range", date_range)
+        st.success("**No concerning symptoms reported**")
     
-    # Display the data
-    st.dataframe(df, use_container_width=True)
+    # Lab Results Summary
+    st.subheader("📈 Key Lab Values")
     
-    # Show which tests were successfully extracted
-    st.subheader("🎯 Successfully Extracted Tests")
-    extracted_tests = [col for col in test_columns if not df[col].isna().all()]
-    st.write(f"Found data for: {', '.join(extracted_tests)}")
+    lab_col1, lab_col2, lab_col3, lab_col4 = st.columns(4)
     
-    # Basic Risk Assessment
-    st.header("🩺 Health Risk Assessment")
+    with lab_col1:
+        hba1c_val = current_data.get('HbA1c', 0)
+        status = "🔴 High" if hba1c_val > 6.5 else "🟡 Borderline" if hba1c_val > 5.7 else "🟢 Normal"
+        st.metric("HbA1c", f"{hba1c_val}%", status)
     
-    risks = calculate_simple_risks(df)
+    with lab_col2:
+        alt_val = current_data.get('ALT', 0)
+        status = "🔴 High" if alt_val > 40 else "🟢 Normal"
+        st.metric("ALT", f"{alt_val} U/L", status)
     
-    if risks:
-        risk_col1, risk_col2, risk_col3 = st.columns(3)
+    with lab_col3:
+        creatinine_val = current_data.get('Creatinine', 0)
+        status = "🔴 High" if creatinine_val > 1.2 else "🟢 Normal"
+        st.metric("Creatinine", f"{creatinine_val} mg/dL", status)
+    
+    with lab_col4:
+        cholesterol_val = current_data.get('Cholesterol', 0)
+        status = "🔴 High" if cholesterol_val > 200 else "🟢 Normal"
+        st.metric("Cholesterol", f"{cholesterol_val} mg/dL", status)
+    
+    # Genetic Insights
+    st.subheader("🧬 Genetic Risk Factors")
+    
+    active_genes = [gene for gene, is_active in st.session_state.genetic_data.items() if is_active]
+    if active_genes:
+        gene_names = [gene.replace("gene_", "") for gene in active_genes]
+        st.info(f"**Known genetic markers:** {', '.join(gene_names)}")
         
-        risk_columns = [risk_col1, risk_col2, risk_col3]
-        for i, (condition, risk_level) in enumerate(risks.items()):
-            with risk_columns[i % 3]:
-                st.metric(f"{condition} Risk", risk_level)
+        # Show associated conditions
+        for gene in gene_names:
+            for condition, genes in GENE_ASSOCIATIONS.items():
+                if gene in genes:
+                    st.write(f"- **{gene}** → Associated with {condition}")
     else:
-        st.info("No risk assessment available - insufficient lab data")
-    
-    # Trend Analysis (if multiple reports)
-    if len(df) > 1 and 'Date' in df.columns:
-        st.header("📈 Trend Analysis")
-        
-        numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-        
-        for col in numeric_cols[:6]:  # Show first 6 numeric columns
-            if col != 'Patient_Age' and df[col].notna().sum() > 1:
-                fig = px.line(df, x='Date', y=col, title=f'{col} Trend', markers=True)
-                st.plotly_chart(fig, use_container_width=True)
+        st.info("No known genetic risk factors reported")
     
     # Recommendations
-    st.header("💡 Recommendations")
+    st.subheader("💡 Personalized Recommendations")
     
     recommendations = []
     
-    if 'Diabetes' in risks and risks['Diabetes'] in ['🔴 High', '🟠 Moderate']:
+    if diabetes_risk >= 4:
         recommendations.extend([
             "🩺 **Monitor HbA1c every 3-6 months**",
-            "🥗 **Consult nutritionist for diabetic diet**",
+            "🥗 **Consult nutritionist for diabetic diet plan**",
             "🏃 **Regular exercise (30 mins, 5 days/week)**"
         ])
     
-    if 'Liver' in risks and risks['Liver'] in ['🔴 High', '🟠 Moderate']:
+    if liver_risk >= 4:
         recommendations.extend([
-            "🔍 **Consider liver function tests**",
+            "🔍 **Consider liver ultrasound**",
             "🚫 **Reduce alcohol consumption**",
             "💊 **Avoid hepatotoxic medications**"
         ])
     
+    if bmi >= 25:
+        recommendations.append("⚖️ **Weight management program recommended**")
+    
+    if smoking_history:
+        recommendations.append("🚭 **Smoking cessation program strongly recommended**")
+    
     if not recommendations:
-        recommendations.append("🎉 **Continue routine health monitoring**")
+        recommendations.append("🎉 **Continue with routine health monitoring**")
     
     for rec in recommendations:
         st.write(rec)
     
     # Export Data
-    st.header("📤 Export Data")
+    st.subheader("📤 Export Health Report")
     
-    if st.button("Download Data as Excel"):
-        output = BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df.to_excel(writer, index=False, sheet_name='Lab_Data')
+    if st.button("Generate Comprehensive Report"):
+        report_content = f"""
+        DIGITAL TWIN HEALTH REPORT
+        Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}
+        
+        PATIENT PROFILE:
+        Name: {patient_name}
+        Age: {age}, Gender: {gender}, BMI: {bmi}
+        
+        RISK ASSESSMENT:
+        Diabetes: {get_risk_label(diabetes_risk)} (Score: {diabetes_risk}/10)
+        Liver Disease: {get_risk_label(liver_risk)} (Score: {liver_risk}/10)
+        
+        ACTIVE SYMPTOMS:
+        {', '.join(active_symptoms) if active_symptoms else 'None'}
+        
+        RECOMMENDATIONS:
+        {chr(10).join(recommendations)}
+        """
         
         st.download_button(
-            label="⬇️ Click to Download Excel File",
-            data=output.getvalue(),
-            file_name=f"lab_data_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            label="⬇️ Download Health Report",
+            data=report_content,
+            file_name=f"health_report_{datetime.now().strftime('%Y%m%d')}.txt",
+            mime="text/plain"
         )
 
 else:
-    st.info("👆 Upload PDF lab reports and click 'Extract Data from PDFs' to begin analysis")
-
-# ----------------------------
-# TROUBLESHOOTING SECTION
-# ----------------------------
-with st.expander("🔧 Troubleshooting Guide"):
-    st.markdown("""
-    **If data extraction isn't working:**
-    
-    1. **Enable Debug Mode**: Check the box above to see raw PDF text
-    2. **PDF Format**: Ensure PDF is text-based (not scanned images)
-    3. **Common Tests**: The system looks for:
-       - HbA1c, Glucose, Hb, WBC, Platelet, ALT, AST, Creatinine, etc.
-    4. **Date Format**: Looks for dates like "11/08/2025"
-    
-    **Supported Lab Tests:**
-    - Diabetes: HbA1c, Glucose
-    - Blood Count: Hb, WBC, Platelet, ESR
-    - Liver: ALT, AST, Bilirubin, Albumin
-    - Kidney: Creatinine, Urea
-    - Other: Calcium, Cholesterol
-    
-    **If still not working**, the PDF might be image-based. Consider OCR tools.
-    """)
+    st.info("👆 Fill in your health information and click 'Save Health Data' to see your analysis")
 
 # ----------------------------
 # FOOTER
 # ----------------------------
 st.markdown("---")
 st.markdown(
-    "<div style='text-align: center'><em>Digital Twin Health Analyzer • For educational purposes • Consult doctors for medical decisions</em></div>",
+    "<div style='text-align: center'><em>Digital Twin Health Analyzer • Manual Data Input Version • Consult healthcare professionals for medical decisions</em></div>",
     unsafe_allow_html=True
 )
