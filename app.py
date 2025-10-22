@@ -114,145 +114,166 @@ st.header("👤 Patient Profile & Demographics")
 
 col1, col2, col3 = st.columns(3)
 with col1:
-    patient_name = st.text_input("Full Name", "John Doe")
-    age = st.number_input("Age", 0, 120, 34)
-    gender = st.selectbox("Gender", ["Male", "Female", "Other"])
+    patient_name = st.text_input("Full Name", "John Doe", key="patient_name")
+    age = st.number_input("Age", 0, 120, 34, key="age")
+    gender = st.selectbox("Gender", ["Male", "Female", "Other"], key="gender")
     
 with col2:
-    weight = st.number_input("Weight (kg)", 10, 200, 70)
-    height = st.number_input("Height (cm)", 50, 250, 170)
+    weight = st.number_input("Weight (kg)", 10, 200, 70, key="weight")
+    height = st.number_input("Height (cm)", 50, 250, 170, key="height")
     if height > 0:
         bmi = round(weight / ((height/100) ** 2), 2)
         bmi_category = "Obese" if bmi >= 30 else "Overweight" if bmi >= 25 else "Normal" if bmi >= 18.5 else "Underweight"
         st.metric("BMI", f"{bmi} ({bmi_category})")
     
 with col3:
-    location = st.text_input("Location", "Mumbai")
-    activity_level = st.selectbox("Activity Level", ["Sedentary", "Light", "Moderate", "Active", "Very Active"])
-    alcohol_consumption = st.selectbox("Alcohol Consumption", ["Never", "Occasional", "Regular"])
+    location = st.text_input("Location", "Mumbai", key="location")
+    activity_level = st.selectbox("Activity Level", ["Sedentary", "Light", "Moderate", "Active", "Very Active"], key="activity")
+    alcohol_consumption = st.selectbox("Alcohol Consumption", ["Never", "Occasional", "Regular"], key="alcohol")
 
 # 2. FAMILY HISTORY
 st.header("🏥 Family Medical History")
 
 fam_col1, fam_col2, fam_col3 = st.columns(3)
 with fam_col1:
-    family_diabetes = st.checkbox("Diabetes")
-    family_heart_disease = st.checkbox("Heart Disease")
-    family_hypertension = st.checkbox("Hypertension")
+    family_diabetes = st.checkbox("Diabetes", key="fam_diabetes")
+    family_heart_disease = st.checkbox("Heart Disease", key="fam_heart")
+    family_hypertension = st.checkbox("Hypertension", key="fam_hypertension")
     
 with fam_col2:
-    family_cancer = st.checkbox("Cancer")
-    family_liver_disease = st.checkbox("Liver Disease")
-    family_kidney_disease = st.checkbox("Kidney Disease")
+    family_cancer = st.checkbox("Cancer", key="fam_cancer")
+    family_liver_disease = st.checkbox("Liver Disease", key="fam_liver")
+    family_kidney_disease = st.checkbox("Kidney Disease", key="fam_kidney")
     
 with fam_col3:
-    smoking_history = st.checkbox("Smoking History")
-    family_obesity = st.checkbox("Obesity")
-    family_thyroid = st.checkbox("Thyroid Disorders")
+    smoking_history = st.checkbox("Smoking History", key="smoking")
+    family_obesity = st.checkbox("Obesity", key="fam_obesity")
+    family_thyroid = st.checkbox("Thyroid Disorders", key="fam_thyroid")
 
 # 3. SYMPTOMS INPUT
 st.header("🤒 Current Symptoms")
 st.info("Select all symptoms you're currently experiencing")
 
-# Organize symptoms by category
-symptoms_container = st.container()
+# Initialize symptoms in session state
+for condition, data in SYMPTOMS_DATABASE.items():
+    for symptom in data["symptoms"]:
+        symptom_key = f"symptom_{condition}_{symptom}"
+        if symptom_key not in st.session_state.symptoms_data:
+            st.session_state.symptoms_data[symptom_key] = False
 
-with symptoms_container:
-    for condition, data in SYMPTOMS_DATABASE.items():
-        with st.expander(f"🔍 {condition} Symptoms", expanded=False):
-            cols = st.columns(2)
-            for i, symptom in enumerate(data["symptoms"]):
-                col_idx = i % 2
-                with cols[col_idx]:
-                    symptom_key = f"{condition}_{symptom}"
-                    st.session_state.symptoms_data[symptom_key] = st.checkbox(symptom, key=symptom_key)
+# Organize symptoms by category
+for condition, data in SYMPTOMS_DATABASE.items():
+    with st.expander(f"🔍 {condition} Symptoms", expanded=False):
+        cols = st.columns(2)
+        for i, symptom in enumerate(data["symptoms"]):
+            col_idx = i % 2
+            with cols[col_idx]:
+                symptom_key = f"symptom_{condition}_{symptom}"
+                # Create unique key for checkbox
+                checkbox_key = f"cb_{symptom_key}"
+                st.session_state.symptoms_data[symptom_key] = st.checkbox(
+                    symptom, 
+                    value=st.session_state.symptoms_data[symptom_key],
+                    key=checkbox_key
+                )
 
 # 4. GENETIC FACTORS
 st.header("🧬 Known Genetic Factors")
 st.info("Select any known genetic markers from previous genetic testing")
 
-genetic_container = st.container()
-with genetic_container:
-    genetic_cols = st.columns(2)
-    col_idx = 0
+# Initialize genetic data in session state
+for condition, genes in GENE_ASSOCIATIONS.items():
+    for gene in genes:
+        gene_key = f"gene_{gene}"
+        if gene_key not in st.session_state.genetic_data:
+            st.session_state.genetic_data[gene_key] = False
+
+genetic_cols = st.columns(2)
+col_idx = 0
+
+for condition, genes in GENE_ASSOCIATIONS.items():
+    with genetic_cols[col_idx]:
+        st.subheader(f"{condition}")
+        for gene in genes:
+            gene_key = f"gene_{gene}"
+            # Create unique key for checkbox
+            checkbox_key = f"cb_{gene_key}"
+            st.session_state.genetic_data[gene_key] = st.checkbox(
+                gene, 
+                value=st.session_state.genetic_data[gene_key],
+                key=checkbox_key
+            )
     
-    for condition, genes in GENE_ASSOCIATIONS.items():
-        with genetic_cols[col_idx]:
-            st.subheader(f"{condition}")
-            for gene in genes:
-                gene_key = f"gene_{gene}"
-                st.session_state.genetic_data[gene_key] = st.checkbox(gene, key=gene_key)
-        
-        col_idx = (col_idx + 1) % 2
+    col_idx = (col_idx + 1) % 2
 
 # 5. LAB RESULTS INPUT
 st.header("📊 Lab Test Results")
 st.info("Enter your latest lab test results. Leave blank if not tested.")
 
-lab_date = st.date_input("Test Date", datetime.now())
+lab_date = st.date_input("Test Date", datetime.now(), key="lab_date")
 
 # Lab results input in expandable sections
 with st.expander("🩸 Complete Blood Count (CBC)", expanded=True):
     col1, col2, col3 = st.columns(3)
     with col1:
-        hemoglobin = st.number_input("Hemoglobin (g/dL)", 5.0, 20.0, 13.0, step=0.1)
-        wbc = st.number_input("WBC (10³/μL)", 1.0, 50.0, 5.0, step=0.1)
+        hemoglobin = st.number_input("Hemoglobin (g/dL)", 5.0, 20.0, 13.0, step=0.1, key="hemoglobin")
+        wbc = st.number_input("WBC (10³/μL)", 1.0, 50.0, 5.0, step=0.1, key="wbc")
     with col2:
-        platelet = st.number_input("Platelet Count (10³/μL)", 50.0, 500.0, 200.0, step=10.0)
-        rbc = st.number_input("RBC (10⁶/μL)", 3.0, 8.0, 5.0, step=0.1)
+        platelet = st.number_input("Platelet Count (10³/μL)", 50.0, 500.0, 200.0, step=10.0, key="platelet")
+        rbc = st.number_input("RBC (10⁶/μL)", 3.0, 8.0, 5.0, step=0.1, key="rbc")
     with col3:
-        hematocrit = st.number_input("Hematocrit (%)", 30.0, 60.0, 42.0, step=0.1)
-        esr = st.number_input("ESR (mm/hr)", 0.0, 100.0, 10.0, step=1.0)
+        hematocrit = st.number_input("Hematocrit (%)", 30.0, 60.0, 42.0, step=0.1, key="hematocrit")
+        esr = st.number_input("ESR (mm/hr)", 0.0, 100.0, 10.0, step=1.0, key="esr")
 
 with st.expander("🩺 Diabetes & Metabolic Panel"):
     col1, col2 = st.columns(2)
     with col1:
-        hba1c = st.number_input("HbA1c (%)", 4.0, 15.0, 5.5, step=0.1)
-        glucose = st.number_input("Glucose (mg/dL)", 50.0, 300.0, 90.0, step=1.0)
+        hba1c = st.number_input("HbA1c (%)", 4.0, 15.0, 5.5, step=0.1, key="hba1c")
+        glucose = st.number_input("Glucose (mg/dL)", 50.0, 300.0, 90.0, step=1.0, key="glucose")
     with col2:
-        insulin = st.number_input("Insulin (μIU/mL)", 0.0, 50.0, 5.0, step=0.1)
-        c_peptide = st.number_input("C-Peptide (ng/mL)", 0.0, 10.0, 1.5, step=0.1)
+        insulin = st.number_input("Insulin (μIU/mL)", 0.0, 50.0, 5.0, step=0.1, key="insulin")
+        c_peptide = st.number_input("C-Peptide (ng/mL)", 0.0, 10.0, 1.5, step=0.1, key="c_peptide")
 
 with st.expander("💊 Liver Function Tests"):
     col1, col2 = st.columns(2)
     with col1:
-        alt = st.number_input("ALT (SGPT) U/L", 5.0, 200.0, 25.0, step=1.0)
-        ast = st.number_input("AST (SGOT) U/L", 5.0, 200.0, 25.0, step=1.0)
+        alt = st.number_input("ALT (SGPT) U/L", 5.0, 200.0, 25.0, step=1.0, key="alt")
+        ast = st.number_input("AST (SGOT) U/L", 5.0, 200.0, 25.0, step=1.0, key="ast")
     with col2:
-        alp = st.number_input("ALP U/L", 30.0, 300.0, 80.0, step=1.0)
-        bilirubin = st.number_input("Total Bilirubin (mg/dL)", 0.1, 10.0, 0.8, step=0.1)
+        alp = st.number_input("ALP U/L", 30.0, 300.0, 80.0, step=1.0, key="alp")
+        bilirubin = st.number_input("Total Bilirubin (mg/dL)", 0.1, 10.0, 0.8, step=0.1, key="bilirubin")
 
 with st.expander("🫀 Kidney Function & Electrolytes"):
     col1, col2 = st.columns(2)
     with col1:
-        creatinine = st.number_input("Creatinine (mg/dL)", 0.5, 10.0, 0.9, step=0.1)
-        urea = st.number_input("Urea (mg/dL)", 10.0, 100.0, 25.0, step=1.0)
+        creatinine = st.number_input("Creatinine (mg/dL)", 0.5, 10.0, 0.9, step=0.1, key="creatinine")
+        urea = st.number_input("Urea (mg/dL)", 10.0, 100.0, 25.0, step=1.0, key="urea")
     with col2:
-        sodium = st.number_input("Sodium (mmol/L)", 130.0, 150.0, 140.0, step=1.0)
-        potassium = st.number_input("Potassium (mmol/L)", 3.0, 6.0, 4.0, step=0.1)
+        sodium = st.number_input("Sodium (mmol/L)", 130.0, 150.0, 140.0, step=1.0, key="sodium")
+        potassium = st.number_input("Potassium (mmol/L)", 3.0, 6.0, 4.0, step=0.1, key="potassium")
 
 with st.expander("📈 Lipid Profile"):
     col1, col2 = st.columns(2)
     with col1:
-        cholesterol = st.number_input("Total Cholesterol (mg/dL)", 100.0, 300.0, 180.0, step=5.0)
-        ldl = st.number_input("LDL Cholesterol (mg/dL)", 50.0, 250.0, 100.0, step=5.0)
+        cholesterol = st.number_input("Total Cholesterol (mg/dL)", 100.0, 300.0, 180.0, step=5.0, key="cholesterol")
+        ldl = st.number_input("LDL Cholesterol (mg/dL)", 50.0, 250.0, 100.0, step=5.0, key="ldl")
     with col2:
-        hdl = st.number_input("HDL Cholesterol (mg/dL)", 20.0, 100.0, 50.0, step=5.0)
-        triglycerides = st.number_input("Triglycerides (mg/dL)", 50.0, 500.0, 120.0, step=5.0)
+        hdl = st.number_input("HDL Cholesterol (mg/dL)", 20.0, 100.0, 50.0, step=5.0, key="hdl")
+        triglycerides = st.number_input("Triglycerides (mg/dL)", 50.0, 500.0, 120.0, step=5.0, key="triglycerides")
 
 with st.expander("🔬 Other Important Tests"):
     col1, col2 = st.columns(2)
     with col1:
-        calcium = st.number_input("Calcium (mg/dL)", 7.0, 12.0, 9.5, step=0.1)
-        tsh = st.number_input("TSH (μIU/mL)", 0.1, 10.0, 2.0, step=0.1)
+        calcium = st.number_input("Calcium (mg/dL)", 7.0, 12.0, 9.5, step=0.1, key="calcium")
+        tsh = st.number_input("TSH (μIU/mL)", 0.1, 10.0, 2.0, step=0.1, key="tsh")
     with col2:
-        vitamin_d = st.number_input("Vitamin D (ng/mL)", 10.0, 100.0, 30.0, step=1.0)
-        psa = st.number_input("PSA (ng/mL)", 0.0, 10.0, 1.0, step=0.1)
+        vitamin_d = st.number_input("Vitamin D (ng/mL)", 10.0, 100.0, 30.0, step=1.0, key="vitamin_d")
+        psa = st.number_input("PSA (ng/mL)", 0.0, 10.0, 1.0, step=0.1, key="psa")
 
 # ----------------------------
 # SAVE DATA BUTTON
 # ----------------------------
-if st.button("💾 Save Health Data", type="primary"):
+if st.button("💾 Save Health Data", type="primary", key="save_data"):
     # Compile all lab data
     lab_data = {
         'Date': lab_date,
@@ -301,7 +322,7 @@ if st.button("💾 Save Health Data", type="primary"):
 # ----------------------------
 # RISK ASSESSMENT FUNCTIONS
 # ----------------------------
-def calculate_diabetes_risk(lab_data, symptoms, family_history, age, bmi):
+def calculate_diabetes_risk(lab_data, symptoms_data, family_history, age, bmi):
     risk_score = 0
     
     # Lab values
@@ -315,7 +336,7 @@ def calculate_diabetes_risk(lab_data, symptoms, family_history, age, bmi):
     
     # Symptoms
     diabetes_symptoms = [s for s in SYMPTOMS_DATABASE["Diabetes"]["symptoms"] 
-                        if st.session_state.symptoms_data.get(f"Diabetes_{s}", False)]
+                        if symptoms_data.get(f"symptom_Diabetes_{s}", False)]
     risk_score += len(diabetes_symptoms)
     
     # Demographics
@@ -328,7 +349,7 @@ def calculate_diabetes_risk(lab_data, symptoms, family_history, age, bmi):
     
     return min(risk_score, 10)
 
-def calculate_liver_risk(lab_data, symptoms, alcohol_consumption):
+def calculate_liver_risk(lab_data, symptoms_data, alcohol_consumption):
     risk_score = 0
     
     # Lab values
@@ -341,7 +362,7 @@ def calculate_liver_risk(lab_data, symptoms, alcohol_consumption):
     
     # Symptoms
     liver_symptoms = [s for s in SYMPTOMS_DATABASE["Liver Disease"]["symptoms"] 
-                     if st.session_state.symptoms_data.get(f"Liver Disease_{s}", False)]
+                     if symptoms_data.get(f"symptom_Liver Disease_{s}", False)]
     risk_score += len(liver_symptoms)
     
     # Lifestyle
@@ -387,10 +408,10 @@ if not st.session_state.health_data.empty:
     risk_col1, risk_col2, risk_col3, risk_col4 = st.columns(4)
     
     with risk_col1:
-        st.metric("Diabetes Risk", get_risk_label(diabetes_risk), f"Score: {diabetes_risk}/10")
+        st.metric("Diabetes Risk", get_risk_label(diabetes_risk), f"Score: {diabetes_risk}/10", key="diabetes_risk_metric")
     
     with risk_col2:
-        st.metric("Liver Disease Risk", get_risk_label(liver_risk), f"Score: {liver_risk}/10")
+        st.metric("Liver Disease Risk", get_risk_label(liver_risk), f"Score: {liver_risk}/10", key="liver_risk_metric")
     
     with risk_col3:
         # Cardiovascular risk (simplified)
@@ -399,15 +420,15 @@ if not st.session_state.health_data.empty:
             cv_risk += 2
         if smoking_history:
             cv_risk += 2
-        st.metric("Heart Disease Risk", get_risk_label(cv_risk), f"Score: {cv_risk}/10")
+        st.metric("Heart Disease Risk", get_risk_label(cv_risk), f"Score: {cv_risk}/10", key="heart_risk_metric")
     
     with risk_col4:
         # Cancer risk (simplified)
         cancer_risk = 3 if family_cancer else 1
         cancer_symptoms = [s for s in SYMPTOMS_DATABASE["Cancer General"]["symptoms"] 
-                          if st.session_state.symptoms_data.get(f"Cancer General_{s}", False)]
+                          if st.session_state.symptoms_data.get(f"symptom_Cancer General_{s}", False)]
         cancer_risk += len(cancer_symptoms)
-        st.metric("Cancer Risk", get_risk_label(cancer_risk), f"Score: {cancer_risk}/10")
+        st.metric("Cancer Risk", get_risk_label(cancer_risk), f"Score: {cancer_risk}/10", key="cancer_risk_metric")
     
     # Symptoms Analysis
     st.subheader("🤒 Symptoms Analysis")
@@ -415,7 +436,9 @@ if not st.session_state.health_data.empty:
     active_symptoms = []
     for symptom_key, is_active in st.session_state.symptoms_data.items():
         if is_active:
-            active_symptoms.append(symptom_key.replace("_", " "))
+            # Extract readable symptom name
+            symptom_name = symptom_key.replace("symptom_", "").split("_", 1)[1]
+            active_symptoms.append(symptom_name)
     
     if active_symptoms:
         st.warning(f"**Active Symptoms:** {', '.join(active_symptoms)}")
@@ -430,22 +453,22 @@ if not st.session_state.health_data.empty:
     with lab_col1:
         hba1c_val = current_data.get('HbA1c', 0)
         status = "🔴 High" if hba1c_val > 6.5 else "🟡 Borderline" if hba1c_val > 5.7 else "🟢 Normal"
-        st.metric("HbA1c", f"{hba1c_val}%", status)
+        st.metric("HbA1c", f"{hba1c_val}%", status, key="hba1c_metric")
     
     with lab_col2:
         alt_val = current_data.get('ALT', 0)
         status = "🔴 High" if alt_val > 40 else "🟢 Normal"
-        st.metric("ALT", f"{alt_val} U/L", status)
+        st.metric("ALT", f"{alt_val} U/L", status, key="alt_metric")
     
     with lab_col3:
         creatinine_val = current_data.get('Creatinine', 0)
         status = "🔴 High" if creatinine_val > 1.2 else "🟢 Normal"
-        st.metric("Creatinine", f"{creatinine_val} mg/dL", status)
+        st.metric("Creatinine", f"{creatinine_val} mg/dL", status, key="creatinine_metric")
     
     with lab_col4:
         cholesterol_val = current_data.get('Cholesterol', 0)
         status = "🔴 High" if cholesterol_val > 200 else "🟢 Normal"
-        st.metric("Cholesterol", f"{cholesterol_val} mg/dL", status)
+        st.metric("Cholesterol", f"{cholesterol_val} mg/dL", status, key="cholesterol_metric")
     
     # Genetic Insights
     st.subheader("🧬 Genetic Risk Factors")
@@ -497,7 +520,7 @@ if not st.session_state.health_data.empty:
     # Export Data
     st.subheader("📤 Export Health Report")
     
-    if st.button("Generate Comprehensive Report"):
+    if st.button("Generate Comprehensive Report", key="generate_report"):
         report_content = f"""
         DIGITAL TWIN HEALTH REPORT
         Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}
@@ -509,9 +532,14 @@ if not st.session_state.health_data.empty:
         RISK ASSESSMENT:
         Diabetes: {get_risk_label(diabetes_risk)} (Score: {diabetes_risk}/10)
         Liver Disease: {get_risk_label(liver_risk)} (Score: {liver_risk}/10)
+        Heart Disease: {get_risk_label(cv_risk)} (Score: {cv_risk}/10)
+        Cancer: {get_risk_label(cancer_risk)} (Score: {cancer_risk}/10)
         
         ACTIVE SYMPTOMS:
         {', '.join(active_symptoms) if active_symptoms else 'None'}
+        
+        GENETIC FACTORS:
+        {', '.join([g.replace('gene_', '') for g in active_genes]) if active_genes else 'None'}
         
         RECOMMENDATIONS:
         {chr(10).join(recommendations)}
@@ -521,7 +549,8 @@ if not st.session_state.health_data.empty:
             label="⬇️ Download Health Report",
             data=report_content,
             file_name=f"health_report_{datetime.now().strftime('%Y%m%d')}.txt",
-            mime="text/plain"
+            mime="text/plain",
+            key="download_report"
         )
 
 else:
