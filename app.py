@@ -58,48 +58,19 @@ cancer_symptoms = st.multiselect("Select Cancer-related symptoms", [
 ])
 
 # -------------------------------------------------
-# SECTION 3: BLOOD TEST + WEIGHT INPUT
+# SECTION 3: BLOOD TEST + WEIGHT INPUT (MANUAL)
 # -------------------------------------------------
-st.header("3️⃣ Enter Blood Test Data Over Time")
+st.header("3️⃣ Add Blood Test Data Over Time")
+st.markdown("Enter at least **2 test results** to analyze trends. Each entry includes: Date, Weight, HbA1c, Glucose, Hb, Platelet, WBC, ESR, ALT, AST, Calcium, PSA")
 
-st.markdown("""
-Enter at least **2 test results** to analyze trends.  
-Each entry includes: Date, Weight, HbA1c, Glucose, Hb, Platelet, WBC, ESR, ALT, AST, Calcium, PSA
-""")
-
-# --- Textbox for bulk input ---
-raw_data = st.text_area(
-    "📋 Paste your data here (comma-separated, each line = one test record)",
-    value="2025-09-01,70,6.1,120,13.8,180000,6.2,12,30,28,9.2,2.0\n2025-10-01,69,6.8,140,12.9,210000,7.8,20,45,40,10.1,3.1",
-    height=150
-)
-
-data_list = []
-for line in raw_data.strip().split("\n"):
-    parts = [p.strip() for p in line.split(",")]
-    if len(parts) == 12:
-        try:
-            data_list.append({
-                "Date": pd.to_datetime(parts[0]),
-                "Weight": float(parts[1]),
-                "HbA1c": float(parts[2]),
-                "Glucose": float(parts[3]),
-                "Hb": float(parts[4]),
-                "Platelet": float(parts[5]),
-                "WBC": float(parts[6]),
-                "ESR": float(parts[7]),
-                "ALT": float(parts[8]),
-                "AST": float(parts[9]),
-                "Calcium": float(parts[10]),
-                "PSA": float(parts[11]),
-            })
-        except:
-            st.warning(f"⚠️ Invalid entry skipped: {line}")
-
-data_df = pd.DataFrame(data_list)
+# Initialize session state for storing entries
+if "blood_data" not in st.session_state:
+    st.session_state.blood_data = pd.DataFrame(columns=[
+        "Date", "Weight", "HbA1c", "Glucose", "Hb", "Platelet",
+        "WBC", "ESR", "ALT", "AST", "Calcium", "PSA"
+    ])
 
 # --- Manual entry form ---
-st.markdown("### ➕ Add New Test Entry")
 with st.form("manual_entry"):
     c1, c2, c3 = st.columns(3)
     date = c1.date_input("Date", datetime.today())
@@ -137,20 +108,20 @@ if submit:
         "Calcium": calcium,
         "PSA": psa
     }
-    data_df = pd.concat([data_df, pd.DataFrame([new_row])], ignore_index=True)
+    st.session_state.blood_data = pd.concat([st.session_state.blood_data, pd.DataFrame([new_row])], ignore_index=True)
 
-if not data_df.empty:
-    data_df = data_df.sort_values("Date")
-    st.dataframe(data_df)
+# Display current data table
+if not st.session_state.blood_data.empty:
+    st.dataframe(st.session_state.blood_data.sort_values("Date"))
 else:
     st.warning("Please add at least 2 test records for analysis.")
 
 # -------------------------------------------------
 # SECTION 4: TREND ANALYSIS + RISK
 # -------------------------------------------------
+data_df = st.session_state.blood_data
 if len(data_df) >= 2:
-    df = data_df.copy()
-    df = df.sort_values("Date")
+    df = data_df.copy().sort_values("Date")
     last = df.iloc[-1]
     prev = df.iloc[-2]
     change = last - prev
@@ -179,16 +150,12 @@ if len(data_df) >= 2:
         diabetes_type = "T1D"
     elif age >= 25 and bmi >= 25:
         diabetes_type = "T2D"
-    if "Gestational diabetes" in diabetes_symptoms:
-        diabetes_type = "GDM"
     if len(diabetes_symptoms) > 0 and age < 25:
         diabetes_type = "MODY"
 
-    # Diabetes Gene Mapping
     diabetes_genes = {
         "T1D": ["HLA-DQA1", "HLA-DQB1", "HLA-DRB1", "CTLA4", "IL2RA", "PTPN22", "INS"],
         "T2D": ["TCF7L2", "PPARG", "KCNJ11", "ABCC8", "LCAT", "APOE", "FTO", "IRS1", "IRS2", "WFS1", "HNF1A", "HNF4A"],
-        "GDM": ["MTNR1B", "CDKAL1", "IRS1"],
         "MODY": ["HNF4A", "HNF1A", "HNF1B"]
     }
     predicted_genes = diabetes_genes.get(diabetes_type, [])
@@ -221,7 +188,6 @@ if len(data_df) >= 2:
     pancreatic_risk = risk_label(pancreatic_score)
     colorectal_risk = risk_label(colorectal_score)
 
-    # Cancer Gene Mapping
     cancer_gene_map = {
         "Pancreatic": ["KRAS", "TP53", "CDKN2A", "SMAD4", "BRCA2"],
         "Colorectal": ["APC", "TP53", "KRAS", "PIK3CA", "MLH1"],
@@ -236,18 +202,18 @@ if len(data_df) >= 2:
     if last.get("ALT",0) > 60 or last.get("AST",0) > 60: cancer_genes += cancer_gene_map["Liver"]
     cancer_genes = list(set(cancer_genes))
 
-    # -------------------------------------------------
-    # TREND CHARTS
-    # -------------------------------------------------
+    # --------------------------
+    # Trend Charts
+    # --------------------------
     st.header("4️⃣ Trend Visualization")
     numeric_cols = df.select_dtypes(include=np.number).columns
     for col in numeric_cols:
         fig = px.line(df, x="Date", y=col, title=f"{col} Trend Over Time", markers=True)
         st.plotly_chart(fig, use_container_width=True)
 
-    # -------------------------------------------------
-    # SUMMARY METRICS
-    # -------------------------------------------------
+    # --------------------------
+    # Summary Metrics
+    # --------------------------
     st.header("5️⃣ Risk Summary")
     col1, col2, col3 = st.columns(3)
     col1.metric("Diabetes Risk", diabetes_risk)
@@ -263,12 +229,5 @@ if len(data_df) >= 2:
     st.subheader("🧬 Genes Likely Involved in Cancer")
     st.write(", ".join(cancer_genes) if cancer_genes else "No specific gene prediction")
 
-    st.subheader("📊 Interpretation Summary")
-    st.markdown(f"""
-    **Activity Level:** {activity}  
-    **Diabetes trend:** {diabetes_risk}  
-    **Pancreatic Cancer trend:** {pancreatic_risk}  
-    **Colorectal Cancer trend:** {colorectal_risk}  
-    """)
 else:
     st.warning("Please enter at least 2 blood test records to perform trend analysis.")
