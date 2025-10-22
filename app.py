@@ -11,14 +11,13 @@ from datetime import datetime
 st.set_page_config(page_title="Digital Twin Health Risk Analyzer", layout="wide")
 st.title("🧬 Digital Twin Health Risk Analyzer (SAMD Prototype)")
 st.markdown("""
-Create your **Digital Twin**, upload lab reports, analyze trends, and get **Diabetes & Cancer risk assessment**.
+Create your **Digital Twin**, upload lab reports, add manual data, analyze trends, and get **Diabetes & Cancer risk assessment**.
 """)
 
 # ----------------------------
 # 1️⃣ Digital Twin Profile
 # ----------------------------
 st.header("1️⃣ Create Your Digital Twin")
-
 col1, col2, col3 = st.columns(3)
 age = col1.number_input("Age", 0, 120, 45)
 gender = col2.selectbox("Gender", ["Male", "Female", "Other"])
@@ -37,7 +36,7 @@ st.metric("Your BMI", bmi)
 # ----------------------------
 all_tests = ["HbA1c", "Glucose", "Hb", "Platelet", "WBC", "ESR",
              "ALT", "AST", "Calcium", "PSA", "Weight", "Date",
-             "TSH", "T3", "T4", "Neutrophils", "Lymphocytes", "Monocytes"]  # Extendable
+             "TSH", "T3", "T4", "Neutrophils", "Lymphocytes", "Monocytes"]
 
 selected_tests = st.multiselect(
     "Select lab tests to extract from PDF",
@@ -81,25 +80,76 @@ def extract_lab_values_dynamic(text, tests):
     return lab_data
 
 # ----------------------------
-# 4️⃣ Process Uploaded PDFs
+# 4️⃣ Initialize DataFrame
 # ----------------------------
 df_all = pd.DataFrame()
+
+# Process PDFs
 if uploaded_files:
     for file in uploaded_files:
         text = extract_text_from_pdf(file)
         data = extract_lab_values_dynamic(text, selected_tests)
         df_all = pd.concat([df_all, pd.DataFrame([data])], ignore_index=True)
 
-    # Convert Date to datetime
-    if "Date" in df_all.columns:
-        df_all['Date'] = pd.to_datetime(df_all['Date'], errors='coerce')
-        df_all = df_all.sort_values('Date')
+# ----------------------------
+# 5️⃣ Manual Data Entry
+# ----------------------------
+st.header("📋 Manual Lab Data Entry (Optional)")
+with st.form("manual_entry_form"):
+    col1, col2, col3 = st.columns(3)
+    manual_date = col1.date_input("Date", datetime.today())
+    manual_hba1c = col2.text_input("HbA1c", "")
+    manual_glucose = col3.text_input("Glucose", "")
 
-    st.subheader("Extracted Lab Data")
+    col4, col5, col6 = st.columns(3)
+    manual_hb = col4.text_input("Hb", "")
+    manual_platelet = col5.text_input("Platelet", "")
+    manual_wbc = col6.text_input("WBC", "")
+
+    col7, col8, col9 = st.columns(3)
+    manual_esr = col7.text_input("ESR", "")
+    manual_alt = col8.text_input("ALT", "")
+    manual_ast = col9.text_input("AST", "")
+
+    col10, col11 = st.columns(2)
+    manual_calcium = col10.text_input("Calcium", "")
+    manual_weight = col11.text_input("Weight", "")
+
+    submit_button = st.form_submit_button("Add Manual Entry")
+
+# Append manual data to df_all
+manual_data = {}
+if submit_button:
+    manual_data["Date"] = pd.to_datetime(manual_date)
+    if manual_hba1c: manual_data["HbA1c"] = float(manual_hba1c)
+    if manual_glucose: manual_data["Glucose"] = float(manual_glucose)
+    if manual_hb: manual_data["Hb"] = float(manual_hb)
+    if manual_platelet: manual_data["Platelet"] = float(manual_platelet)
+    if manual_wbc: manual_data["WBC"] = float(manual_wbc)
+    if manual_esr: manual_data["ESR"] = float(manual_esr)
+    if manual_alt: manual_data["ALT"] = float(manual_alt)
+    if manual_ast: manual_data["AST"] = float(manual_ast)
+    if manual_calcium: manual_data["Calcium"] = float(manual_calcium)
+    if manual_weight: manual_data["Weight"] = float(manual_weight)
+
+    if df_all.empty:
+        df_all = pd.DataFrame([manual_data])
+    else:
+        df_all = pd.concat([df_all, pd.DataFrame([manual_data])], ignore_index=True)
+
+    if "Date" in df_all.columns:
+        df_all = df_all.sort_values("Date")
+    st.success("Manual entry added successfully!")
+
+# ----------------------------
+# 6️⃣ Display Data
+# ----------------------------
+if not df_all.empty:
+    st.subheader("Merged Lab Data")
     st.dataframe(df_all)
 
     # ----------------------------
-    # 5️⃣ Trend Analysis
+    # Trend Visualization
     # ----------------------------
     st.subheader("Trend Visualization")
     numeric_cols = df_all.select_dtypes(include='number').columns
@@ -130,7 +180,7 @@ if uploaded_files:
         st.write(alerts)
 
     # ----------------------------
-    # 6️⃣ Diabetes Risk Scoring
+    # Diabetes Risk Scoring
     # ----------------------------
     st.subheader("Diabetes Risk Assessment")
     diabetes_risk = "Unknown"
@@ -146,7 +196,7 @@ if uploaded_files:
     st.metric("Diabetes Risk", diabetes_risk)
 
     # ----------------------------
-    # 7️⃣ Cancer Risk Scoring (Pancreatic + Colorectal)
+    # Cancer Risk Scoring
     # ----------------------------
     st.subheader("Cancer Risk Assessment")
     pancreatic_risk_score = 0
@@ -160,7 +210,7 @@ if uploaded_files:
         if "HbA1c" in change.index and change["HbA1c"] > 0: pancreatic_risk_score += 1
         if "Platelet" in change.index and change["Platelet"] > 0: pancreatic_risk_score += 1
         if ("ALT" in change.index and change["ALT"] > 0) or ("AST" in change.index and change["AST"] > 0): pancreatic_risk_score += 1
-        if ("WBC" in change.index and change["WBC"] > 0) or ("Monocytes" in change.index and change["Monocytes"] > 0): pancreatic_risk_score += 1
+        if ("WBC" in change.index and change["WBC"] > 0) or ("Monocytes" in change.index and "Monocytes" in df_all.columns and change["Monocytes"] > 0): pancreatic_risk_score += 1
         if "Calcium" in change.index and change["Calcium"] > 0: pancreatic_risk_score += 1
         if "Hb" in change.index and change["Hb"] < 0: pancreatic_risk_score += 1
 
@@ -170,41 +220,29 @@ if uploaded_files:
         if "WBC" in change.index and change["WBC"] > 0: colorectal_risk_score += 1
         if "Calcium" in change.index and change["Calcium"] > 0: colorectal_risk_score += 1
 
-        # Risk labels
-        def get_risk_label(score):
-            if score >= 5: return "🔴 High"
-            elif score >= 3: return "🟠 Moderate"
-            else: return "🟢 Low"
+    def get_risk_label(score):
+        if score >= 5: return "🔴 High"
+        elif score >= 3: return "🟠 Moderate"
+        else: return "🟢 Low"
 
-        pancreatic_risk = get_risk_label(pancreatic_risk_score)
-        colorectal_risk = get_risk_label(colorectal_risk_score)
+    pancreatic_risk = get_risk_label(pancreatic_risk_score)
+    colorectal_risk = get_risk_label(colorectal_risk_score)
 
-        col1, col2 = st.columns(2)
-        col1.metric("Pancreatic Cancer Risk", pancreatic_risk)
-        col2.metric("Colorectal Cancer Risk", colorectal_risk)
+    st.metric("Pancreatic Cancer Risk", pancreatic_risk)
+    st.metric("Colorectal Cancer Risk", colorectal_risk)
 
     # ----------------------------
-    # 8️⃣ Gene Association Mapping (Example)
+    # Excel Download
     # ----------------------------
-    st.subheader("Gene Associations (Example)")
-    gene_associations = {
-        "Type 1 Diabetes": ["HLA-DQA1", "HLA-DQB1", "HLA-DRB1", "CTLA4", "IL2RA", "PTPN22"],
-        "Type 2 Diabetes": ["TCF7L2", "PPARG", "KCNJ11", "ABCC8", "LCAT", "APOE", "FTO", "IRS1", "IRS2"],
-        "Pancreatic Cancer": ["KRAS", "TP53", "CDKN2A", "SMAD4"],
-        "Colorectal Cancer": ["APC", "KRAS", "TP53", "MLH1", "MSH2"]
-    }
-    for condition, genes in gene_associations.items():
-        st.markdown(f"**{condition}:** {', '.join(genes)}")
-
-    # ----------------------------
-    # 9️⃣ Excel Download
-    # ----------------------------
+    st.subheader("📥 Download Data")
+    df_to_download = df_all.copy()
+    df_to_download["Date"] = df_to_download["Date"].astype(str)
     st.download_button(
-        label="Download All Data as Excel",
-        data=df_all.to_excel(index=False),
+        label="Download as Excel",
+        data=df_to_download.to_excel(index=False, engine='openpyxl'),
         file_name="digital_twin_lab_data.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
 else:
-    st.info("Upload PDF lab reports to start analysis.")
+    st.info("Upload PDF lab reports or add manual entries to analyze trends.")
