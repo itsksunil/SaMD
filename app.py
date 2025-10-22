@@ -10,7 +10,7 @@ from datetime import datetime
 st.set_page_config(page_title="Digital Twin Health Risk Analyzer", layout="wide")
 st.title("🧬 Digital Twin Health Risk Analyzer (Diabetes + Cancer)")
 st.markdown("""
-This prototype evaluates **Diabetes** and **Cancer** risk based on blood biomarkers, symptoms, and patient profile, and links to **likely genes** involved.
+This prototype evaluates **Diabetes** and **Cancer** risk based on blood biomarkers, symptoms, weight trends, and patient profile, linking to **likely genes** involved.
 """)
 
 # -------------------------------------------------
@@ -24,11 +24,11 @@ gender = col2.selectbox("Gender", ["Male", "Female", "Other"])
 height = col3.number_input("Height (cm)", 100, 220, 170)
 
 col4, col5, col6 = st.columns(3)
-weight = col4.number_input("Weight (kg)", 20, 200, 70)
+weight_current = col4.number_input("Current Weight (kg)", 20, 300, 70)
 location = col5.text_input("Location", "Mumbai")
 activity = col6.selectbox("Activity Level", ["Low", "Moderate", "High"])
 
-bmi = round(weight / ((height / 100) ** 2), 2)
+bmi = round(weight_current / ((height / 100) ** 2), 2)
 st.metric("Your BMI", bmi)
 
 # -------------------------------------------------
@@ -58,41 +58,40 @@ cancer_symptoms = st.multiselect("Select Cancer-related symptoms", [
 ])
 
 # -------------------------------------------------
-# SECTION 3: BLOOD TEST INPUT
+# SECTION 3: BLOOD TEST + WEIGHT INPUT
 # -------------------------------------------------
-st.header("3️⃣ Enter Blood Test Data")
+st.header("3️⃣ Enter Blood Test Data Over Time")
 
 st.markdown("""
 Enter at least **2 test results** to analyze trends.  
-You can either:
-- 🧾 **Paste comma-separated data** below (Date,HbA1c,Glucose,Hb,Platelet,WBC,ESR,ALT,AST,Calcium,PSA)  
-- ✍️ **Or add manually** using the entry form below.
+Each entry includes: Date, Weight, HbA1c, Glucose, Hb, Platelet, WBC, ESR, ALT, AST, Calcium, PSA
 """)
 
 # --- Textbox for bulk input ---
 raw_data = st.text_area(
     "📋 Paste your data here (comma-separated, each line = one test record)",
-    value="2025-09-01,6.1,120,13.8,180000,6.2,12,30,28,9.2,2.0\n2025-10-01,6.8,140,12.9,210000,7.8,20,45,40,10.1,3.1",
+    value="2025-09-01,70,6.1,120,13.8,180000,6.2,12,30,28,9.2,2.0\n2025-10-01,69,6.8,140,12.9,210000,7.8,20,45,40,10.1,3.1",
     height=150
 )
 
 data_list = []
 for line in raw_data.strip().split("\n"):
     parts = [p.strip() for p in line.split(",")]
-    if len(parts) == 11:
+    if len(parts) == 12:
         try:
             data_list.append({
                 "Date": pd.to_datetime(parts[0]),
-                "HbA1c": float(parts[1]),
-                "Glucose": float(parts[2]),
-                "Hb": float(parts[3]),
-                "Platelet": float(parts[4]),
-                "WBC": float(parts[5]),
-                "ESR": float(parts[6]),
-                "ALT": float(parts[7]),
-                "AST": float(parts[8]),
-                "Calcium": float(parts[9]),
-                "PSA": float(parts[10]),
+                "Weight": float(parts[1]),
+                "HbA1c": float(parts[2]),
+                "Glucose": float(parts[3]),
+                "Hb": float(parts[4]),
+                "Platelet": float(parts[5]),
+                "WBC": float(parts[6]),
+                "ESR": float(parts[7]),
+                "ALT": float(parts[8]),
+                "AST": float(parts[9]),
+                "Calcium": float(parts[10]),
+                "PSA": float(parts[11]),
             })
         except:
             st.warning(f"⚠️ Invalid entry skipped: {line}")
@@ -104,27 +103,29 @@ st.markdown("### ➕ Add New Test Entry")
 with st.form("manual_entry"):
     c1, c2, c3 = st.columns(3)
     date = c1.date_input("Date", datetime.today())
-    hba1c = c2.number_input("HbA1c (%)", 3.0, 15.0, 6.0)
-    glucose = c3.number_input("Glucose (mg/dL)", 50, 500, 120)
+    weight = c2.number_input("Weight (kg)", 10, 300, 70)
+    hba1c = c3.number_input("HbA1c (%)", 0.0, 100.0, 6.0, step=0.1)
 
     c4, c5, c6 = st.columns(3)
-    hb = c4.number_input("Hemoglobin (g/dL)", 5.0, 20.0, 13.0)
-    platelet = c5.number_input("Platelet (per µL)", 10000, 800000, 200000)
-    wbc = c6.number_input("WBC (×10⁹/L)", 1.0, 20.0, 7.0)
+    glucose = c4.number_input("Glucose (mg/dL)", 0, 1000, 120)
+    hb = c5.number_input("Hemoglobin (g/dL)", 0.0, 30.0, 13.0)
+    platelet = c6.number_input("Platelet (per µL)", 0, 2000000, 200000)
 
     c7, c8, c9 = st.columns(3)
-    esr = c7.number_input("ESR (mm/hr)", 1, 100, 10)
-    alt = c8.number_input("ALT (U/L)", 5, 150, 30)
-    ast = c9.number_input("AST (U/L)", 5, 150, 28)
+    wbc = c7.number_input("WBC (×10⁹/L)", 0.0, 100.0, 7.0)
+    esr = c8.number_input("ESR (mm/hr)", 0.0, 200.0, 10.0)
+    alt = c9.number_input("ALT (U/L)", 0.0, 500.0, 30.0)
 
-    calcium = st.number_input("Calcium (mg/dL)", 5.0, 15.0, 9.5)
-    psa = st.number_input("PSA (ng/mL)", 0.0, 100.0, 2.0)
+    ast = st.number_input("AST (U/L)", 0.0, 500.0, 28.0)
+    calcium = st.number_input("Calcium (mg/dL)", 0.0, 20.0, 9.5)
+    psa = st.number_input("PSA (ng/mL)", 0.0, 1000.0, 2.0)
 
     submit = st.form_submit_button("Add Entry")
 
 if submit:
     new_row = {
         "Date": pd.to_datetime(date),
+        "Weight": weight,
         "HbA1c": hba1c,
         "Glucose": glucose,
         "Hb": hb,
@@ -163,6 +164,14 @@ if len(data_df) >= 2:
         diabetes_risk = "🟠 Moderate"
     else:
         diabetes_risk = "🟢 Low"
+
+    # Weight trend
+    if change["Weight"] < -2:
+        weight_trend = "⚠️ Rapid weight loss"
+    elif change["Weight"] > 2:
+        weight_trend = "⚠️ Rapid weight gain"
+    else:
+        weight_trend = "Stable"
 
     # Diabetes Type Prediction
     diabetes_type = "Unknown"
@@ -240,11 +249,10 @@ if len(data_df) >= 2:
     # SUMMARY METRICS
     # -------------------------------------------------
     st.header("5️⃣ Risk Summary")
-
     col1, col2, col3 = st.columns(3)
     col1.metric("Diabetes Risk", diabetes_risk)
-    col2.metric("Pancreatic Cancer Risk", pancreatic_risk)
-    col3.metric("Colorectal Cancer Risk", colorectal_risk)
+    col2.metric("Weight Trend", weight_trend)
+    col3.metric("BMI", bmi)
 
     st.subheader("Predicted Type of Diabetes")
     st.write(diabetes_type)
@@ -257,7 +265,6 @@ if len(data_df) >= 2:
 
     st.subheader("📊 Interpretation Summary")
     st.markdown(f"""
-    **BMI:** {bmi} ({'Overweight' if bmi > 25 else 'Normal'})  
     **Activity Level:** {activity}  
     **Diabetes trend:** {diabetes_risk}  
     **Pancreatic Cancer trend:** {pancreatic_risk}  
